@@ -16,4 +16,3 @@ r = requests.get(url, params)
 
 spreads = pd.read_json(r.text)
 
-print(spreads.tail())
