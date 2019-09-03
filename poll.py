@@ -6,7 +6,8 @@ class Matchup:
         self.away = away
         self.homescore = homescore
         self.awayscore = awayscore
-        self.spread = spread
+        self.spread = float(spread.split()[-1])
+        self.favored_team = spread.split()[:-1]
         self.away_actual = self.awayscore - self.homescore
         self.home_actual = self.homescore - self.awayscore
 
@@ -20,5 +21,5 @@ class Matchup:
         self.home_votes = get_prev_votes(self.home)
         self.away_votes = get_prev_votes(self.away)
     
-        self.home_votes += self.spread - self.home_actual
-        self.away_votes += self.spread*-1 - self.away_actual
+        self.home_votes += self.spread + self.home_actual
+        self.away_votes += self.spread + self.away_actual
