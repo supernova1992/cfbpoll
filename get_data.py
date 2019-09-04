@@ -33,7 +33,8 @@ def get_matchups(week):
     params = {'year':2019,'week':week}
     r = requests.get(url, params)
     matchups = pd.read_json(r.text)
-    m = [Matchup(a, b, c, d, get_spread(week, a), week) for a,b,c,d in zip(matchups['home_team'],matchups['away_team'],matchups['home_points'],matchups['away_points'])]
+    sos = pd.read_csv('spratings2018.csv')
+    m = [Matchup(a, b, c, d, get_spread(week, a), week, (sos['rating'][sos['team'] == a],sos['rating'][sos['team'] == b])) for a,b,c,d in zip(matchups['home_team'],matchups['away_team'],matchups['home_points'],matchups['away_points'])]
     return m
 
 z = get_matchups(1)
@@ -44,14 +45,13 @@ votes.update(votes2)
 print(sorted(votes.items(), key=lambda x: x[1], reverse=True)[:25])
 
 '''
-url = 'https://api.collegefootballdata.com/games/teams'
-params = {'year':2019,'week':1}
+url = 'https://api.collegefootballdata.com/ratings/sp'
+params = {'year':2018}
 
 r = requests.get(url, params)
 
-d = r.json()
+df = pd.read_json(r.text)
 
-for item in d[0]['teams'][0]['stats']:
-    if item['category'] == 'totalYards':
-        print(f"Total yards: {item['stat']}")
+df.to_csv('spratings2018.csv')
 '''
+
