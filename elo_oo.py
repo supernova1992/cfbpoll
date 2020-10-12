@@ -23,8 +23,6 @@ class Poll:
             seasons[year] = Season(year, prev_elo)
             prev_elo = seasons[year].elo
 
-        return
-
 
 class Season:
     def __init__(self, year, prev_elo=None):
@@ -33,6 +31,7 @@ class Season:
         self.prev_elo = prev_elo
         self.tracked_teams = self.get_teams()
         self.elo = self.initialize_elo()
+        self.weeks = self.get_stats()
 
     def initialize_elo(self):
         teams = self.tracked_teams
@@ -58,6 +57,11 @@ class Season:
         week_dict = {}
         for w in weeks:
             week_dict[w] = Week(w, df[df["week"] == w])
+        return week_dict
+
+    def run(self):
+        for week in self.weeks:
+            self.elo = week.run()
 
 
 class Week:
@@ -67,3 +71,6 @@ class Week:
         self.results = results
         self.prev_elo = prev_elo
 
+    def run(self):
+        elo = self.prev_elo
+        return elo
