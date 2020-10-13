@@ -20,8 +20,10 @@ class Poll:
         self.seasons = {}
         prev_elo = None
         for year in range(self.start, self.end + 1):
-            seasons[year] = Season(year, prev_elo)
-            prev_elo = seasons[year].elo
+            self.seasons[year] = Season(year, prev_elo)
+            prev_elo = self.seasons[year].elo
+
+        print("complete")
 
 
 class Season:
@@ -31,11 +33,11 @@ class Season:
         self.prev_elo = prev_elo
         self.tracked_teams = self.get_teams()
         self.elo = self.initialize_elo()
-        self.weeks = self.get_stats()
+        self.get_stats()
 
     def initialize_elo(self):
         teams = self.tracked_teams
-        if not self.prev_elo:
+        if self.prev_elo is None:
             elo = 1500
             df = pd.DataFrame(
                 [teams, [elo for x in range(len(teams))]], index=["team", "elo"]
@@ -57,11 +59,7 @@ class Season:
         week_dict = {}
         for w in weeks:
             week_dict[w] = Week(w, df[df["week"] == w])
-        return week_dict
-
-    def run(self):
-        for week in self.weeks:
-            self.elo = week.run()
+        self.weeks = week_dict
 
 
 class Week:
@@ -70,7 +68,25 @@ class Week:
         self.week = week
         self.results = results
         self.prev_elo = prev_elo
+        self.combined = pd.merge(
+            self.results, self.prev_elo, left_on="home_team", right_on="team"
+        )
+        self.combined = pd.merge(
+            self.combined, self.prev_elo, left_on="away_team", right_on="team"
+        )
+        self.games = []
+        for _, row in self.combined.iterrows():
+            self.games.append(Game(row))
 
-    def run(self):
-        elo = self.prev_elo
-        return elo
+
+class Game:
+    def __init__(self, data):
+        self.home = data["home_team"]
+        self.away = data["away_team"]
+        self.home_score = data["home_points"]
+        self.away_score = data["away_points"]
+
+
+p = Poll(2010, 2020, 6)
+p.run()
+print(p.seasons[2019].weeks[1])
