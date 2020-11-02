@@ -86,7 +86,22 @@ class Season:
         self.week_results = []
         for week in self.weeks.values():
             self.week_results.append(week.update())
-        self.new_elo = self.week_results[-1]
+        self.home_teams = self.week_results[0]
+        self.home_teams = self.home_teams.rename({"elo": 0}, axis="columns")
+        for i, w in enumerate(self.week_results[1:]):
+            w = w.rename({"elo": i + 1}, axis="columns")
+            if i == 0:
+                self.home_teams = pd.merge(self.home_teams, w, on="team", how="outer")
+            else:
+                self.home_teams = pd.merge(self.home_teams, w, on="team", how="outer")
+        print(len(self.home_teams))
+        for i in range(15):
+            if i == 0:
+                self.home_teams[i] = self.home_teams[i].fillna(self.home_teams[i + 1])
+            else:
+                self.home_teams[i] = self.home_teams[i].fillna(self.home_teams[i - 1])
+        self.new_elo = self.home_teams.filter(["team", 14], axis=1)
+        self.new_elo = self.new_elo.rename({14: "elo"}, axis="columns")
 
 
 class Week:
@@ -171,7 +186,8 @@ class Game:
         self.away_elo = new_away_elo
 
 
-p = Poll(2010, 2020, 6)
+p = Poll(2019, 2020, 6)
 p.run()
-print(p.seasons[2020].week_results)
+out = p.seasons[2020].week_results[5].sort_values("elo", ascending=False)
+print(out.head(25))
 

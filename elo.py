@@ -3,9 +3,12 @@ import numpy as np
 import cfbd
 import math
 from functools import reduce
+from datetime import datetime
+
+now = datetime.now()
 
 
-def elo_calc(results, ratings, k=25, g=1):
+def elo_calc(results, ratings, k=200, g=1):
 
     # get teams into a list
     teams = [x for x in results["home_team"]]
@@ -21,18 +24,20 @@ def elo_calc(results, ratings, k=25, g=1):
     # update elo based on results
     home_change = []
     away_change = []
-    for index, row in results.iterrows():
+    p5list = ["ACC", "Big 12", "SEC", "Big Ten", "Pac-12", "FBS Independents"]
+    prev_season = 0
+    for index, row in results.reset_index().iterrows():
         # get information from results dataframe
         home = row["home_team"]
         home_score = float(row["home_points"])
         away = row["away_team"]
         away_score = float(row["away_points"])
         # get elo for each team and find expected winner
+        if row["season"] != prev_season:
+            elo_df["Elo"] = 1500 + (0.1 * elo_df["Elo"])
+            print(elo_df.head())
         home_elo = float(elo_df.loc[elo_df["Team"] == home]["Elo"])
         away_elo = float(elo_df.loc[elo_df["Team"] == away]["Elo"])
-        if row["week"] == 1:
-            home_elo = 1500 + (0.01 * home_elo)
-            away_elo = 1500 + (0.01 * away_elo)
         elos = {"home": float(home_elo), "away": float(away_elo)}
         # expected = max(elos.keys(), key=(lambda key: elos[key]))
         # determine actual winner based on score
@@ -47,31 +52,24 @@ def elo_calc(results, ratings, k=25, g=1):
 
         mov_multiplier = log_part * multiplied_part
         home_rating = ratings.loc[ratings["team"] == home][row["season"]]
-        home_rating = (
-            float(home_rating)
-            if len(home_rating.index) > 0
-            else min(ratings[row["season"]])
-        )
+        home_rating = float(home_rating) if len(home_rating.index) > 0 else 1
         away_rating = ratings.loc[ratings["team"] == away][row["season"]]
-        away_rating = (
-            float(away_rating)
-            if len(away_rating.index) > 0
-            else min(ratings[row["season"]])
-        )
-        if row["away_conference"] not in ["ACC", "Big 12", "SEC", "Big Ten", "Pac-12"]:
-            a_p5 = 2
-        else:
-            a_p5 = 1
-        if row["home_conference"] not in ["ACC", "Big 12", "SEC", "Big Ten", "Pac-12"]:
-            h_p5 = 2
-        else:
-            h_p5 = 1
+        away_rating = float(away_rating) if len(away_rating.index) > 0 else 1
+        h_p5 = True if row["home_conference"] in p5list else False
+        a_p5 = True if row["away_conference"] in p5list else False
+        p5_mult = 1
         new_home_elo = home_elo + (
-            k * (int(winner == "home") - home_expected) * mov_multiplier
-        ) * (0.5 * abs(home_rating - away_rating) / a_p5)
+            k
+            * (int(winner == "home") - home_expected)
+            * mov_multiplier
+            * (0.05 * math.log(abs(away_rating) + 1 * p5_mult))
+        )
         new_away_elo = away_elo + (
-            k * (int(winner == "away") - away_expected) * mov_multiplier
-        ) * (0.5 * abs(home_rating - away_rating) / h_p5)
+            k
+            * (int(winner == "away") - away_expected)
+            * mov_multiplier
+            * (0.05 * math.log(abs(home_rating) + 1 * p5_mult))
+        )
 
         elo_df.loc[elo_df["Team"] == home, "Elo"] = new_home_elo
         elo_df.loc[elo_df["Team"] == away, "Elo"] = new_away_elo
@@ -79,6 +77,7 @@ def elo_calc(results, ratings, k=25, g=1):
         d_elo_away = new_away_elo - away_elo
         home_change.append(d_elo_home)
         away_change.append(d_elo_away)
+        prev_season = row["season"]
 
     results["home_delta_elo"] = home_change
     results["away_delta_elo"] = away_change
@@ -86,7 +85,7 @@ def elo_calc(results, ratings, k=25, g=1):
     return elo_df, results
 
 
-years = range(2010, 2021)
+years = range(2015, 2021)
 api = cfbd.GamesApi()
 
 game_holder = []
@@ -110,6 +109,7 @@ for year in years:
         axis=1,
     )
     sp = sp.rename(columns={"rating": year})
+    sp = sp.fillna(-40)
     sp[year] = sp[year] + abs(min(sp[year]))
     rating_holder.append(sp)
 
@@ -126,7 +126,7 @@ elo, results = elo_calc(games, ratings)
 elo = elo.sort_values("Elo", ascending=False)
 # print(elo.head(25))
 # print(elo.loc[elo["Team"] == "Texas A&M"])
-week_5 = results.loc[(results["week"] == 6) & (results["season"] == 2020)]
+week_5 = results.loc[(results["week"] == 8) & (results["season"] == 2020)]
 
 print(week_5[["home_team", "away_team", "home_delta_elo", "away_delta_elo"]])
 
@@ -147,7 +147,7 @@ for x in g2020["away_team"]:
 
 teams = np.unique(teams)
 
-elo2 = elo[elo["Team"].isin(teams)]
+elo2 = elo[elo["Team"].isin(teams)].copy(deep=True)
 elo2 = elo2.dropna()
 elo2["rank"] = range(len(elo2["Team"]))
 elo2["rank"] = elo2["rank"] + 1
@@ -155,7 +155,7 @@ print(elo2.head(25))
 print(elo2["Elo"].astype(float).describe(include="all"))
 
 # next week predictions
-matchups = week_pred[week_pred["week"] == 7]
+matchups = week_pred[week_pred["week"] == 9]
 matchups = matchups[
     (pd.notna(matchups["home_conference"])) & (pd.notna(matchups["away_conference"]))
 ]
@@ -168,9 +168,12 @@ for index, game in matchups.iterrows():
     away_elo = float(elo[elo["Team"] == away]["Elo"])
     g_dict = {home: home_elo, away: away_elo}
     p_winner = max(g_dict.keys(), key=(lambda key: g_dict[key]))
+    p_loser = min(g_dict.keys(), key=(lambda key: g_dict[key]))
     delta_elo = abs(home_elo - away_elo)
-    predictions.append([p_winner, delta_elo])
+    predictions.append([p_winner, p_loser, delta_elo])
 
-for x in predictions:
-    print(x[0])
+prediction_df = pd.DataFrame(predictions, columns=["Winner", "Loser", "DeltaElo"])
+print(prediction_df)
+
+print(f"Time to complete: {datetime.now()-now}")
 
