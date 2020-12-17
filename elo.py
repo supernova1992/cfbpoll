@@ -1,14 +1,18 @@
+from re import match
 import pandas as pd
 import numpy as np
 import cfbd
 import math
 from functools import reduce
 from datetime import datetime
+import random
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 now = datetime.now()
 
 
-def elo_calc(results, ratings, k=20, g=1):
+def elo_calc(results, ratings, k=30):
 
     # get teams into a list
     teams = [x for x in results["home_team"]]
@@ -34,8 +38,8 @@ def elo_calc(results, ratings, k=20, g=1):
         away_score = float(row["away_points"])
         # get elo for each team and find expected winner
         if row["season"] != prev_season:
-            elo_df["Elo"] = 1500 + (0.35 * elo_df["Elo"])
-            # elo_df["Elo"] = 0.85 * elo_df["Elo"]
+            # elo_df["Elo"] = 1500 + (0.35 * elo_df["Elo"])
+            elo_df["Elo"] = 0.75 * elo_df["Elo"]
             print(f"Simulating {row['season']} season...")
         home_elo = float(elo_df.loc[elo_df["Team"] == home]["Elo"])
         away_elo = float(elo_df.loc[elo_df["Team"] == away]["Elo"])
@@ -200,15 +204,42 @@ def predict(elo, week_pred, current_week):
         delta_elo = abs(home_elo - away_elo)
         p_delta_elo = home_elo - away_elo
         home_win_pct = 1 / ((10 ** (-p_delta_elo / 400)) + 1)
-        predictions.append([p_winner, p_loser, delta_elo, home_win_pct])
+        predictions.append([p_winner, p_loser, delta_elo, home_win_pct, home])
 
     prediction_df = pd.DataFrame(
-        predictions, columns=["Winner", "Loser", "DeltaElo", "HomeWinPCT"]
+        predictions, columns=["Winner", "Loser", "DeltaElo", "HomeWinPCT", "HomeTeam"]
     )
     print(prediction_df)
+    return prediction_df
+
+
+def simgame(homewinpct):
+    roll = random.randint(1, 100) / 100
+    if roll > homewinpct:
+        home_win = 0
+    else:
+        home_win = 1
+    return home_win
+
+
+def simulate(predictions, num_epochs):
+    results = []
+    error = []
+    for index, matchup in predictions.iterrows():
+        holder = []
+        for _ in range(num_epochs):
+            holder.append(simgame(matchup["HomeWinPCT"]))
+        m = sum(holder) / len(holder)
+        e = np.std(holder)
+        results.append(m)
+        error.append(e)
+    predictions["montecarlo"] = results
+    predictions["error"] = error
+    print(predictions)
 
 
 elo, week = generate_rankings(2015, 2020, 15)
-predict(elo, week, 15)
+predictions = predict(elo, week, 15)
+simulate(predictions, 5000)
 print(f"Time to complete: {datetime.now()-now}")
 
